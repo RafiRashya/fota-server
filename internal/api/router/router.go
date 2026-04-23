@@ -9,5 +9,6 @@ func SetupRouter(firmwareHandler *handler.FirmwareHandler) *http.ServeMux{
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/v1/firmware/download", firmwareHandler.Download)
+	mux.HandleFunc("/api/v1/firmware/upload", firmwareHandler.Upload)
 	return mux
 }

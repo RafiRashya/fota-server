@@ -27,7 +27,7 @@ func main() {
 
 	// 2. Inisialisasi Handler & Router 
 	firmwareDir := "./firmware"
-	fwHandler := handler.NewFirmwareHandler(firmwareDir)
+	fwHandler := handler.NewFirmwareHandler(firmwareDir, mqttClient)
 	mux := router.SetupRouter(fwHandler)
 
 	// 3. Menjalankan Server
