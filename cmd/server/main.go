@@ -67,6 +67,6 @@ func main() {
 
 	// 3. Menjalankan Server
 	port := os.Getenv("PORT")
-	fmt.Printf("Backend FOTA Server berjalan di PORT t%s\n", port)
+	fmt.Printf("Backend FOTA Server berjalan di PORT %s\n", port)
 	log.Fatal(http.ListenAndServe(port, mux))
 }

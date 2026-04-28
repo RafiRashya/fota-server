@@ -38,8 +38,9 @@ func (h *FirmwareHandler) Upload(w http.ResponseWriter, r *http.Request){
 	}
 
 	version := r.FormValue("version")
-	if version == "" {
-		http.Error(w, "Version Parameter Cannot be Empty", http.StatusBadRequest)
+	nodeLabel := r.FormValue("node_label")
+	if version == "" || nodeLabel == ""{
+		http.Error(w, "Version and Node Label Parameter Cannot be Empty", http.StatusBadRequest)
 		return
 	}
 
@@ -53,7 +54,7 @@ func (h *FirmwareHandler) Upload(w http.ResponseWriter, r *http.Request){
 	defer file.Close()
 
 	ctx := context.Background()
-	objectKey := fmt.Sprintf("firmware/v%s/nimble-shm-ota.bin", version)
+	objectKey := fmt.Sprintf("firmware/%s/v%s/nimble-shm-ota.bin", nodeLabel, version)
 
 	bucket := h.StorageClient.Bucket(h.BucketName)
 	obj := bucket.Object(objectKey)
@@ -74,7 +75,7 @@ func (h *FirmwareHandler) Upload(w http.ResponseWriter, r *http.Request){
 		GoogleAccessID:		h.GoogleAccessID,
 		PrivateKey: 		h.PrivateKey,
 		Method: 			http.MethodGet,
-		Expires: 			time.Now().Add(30 * time.Minute),
+		Expires: 			time.Now().Add(15 * time.Minute),
 	}
 
 	signedURL, err := storage.SignedURL(h.BucketName, objectKey, opts)
@@ -87,6 +88,7 @@ func (h *FirmwareHandler) Upload(w http.ResponseWriter, r *http.Request){
 	triggerMsg := map[string]string{
 		"cmd": "start_ota",
 		"url": signedURL,
+		"target_version": version,
 	}
 
 	payload, _ := json.Marshal(triggerMsg)
