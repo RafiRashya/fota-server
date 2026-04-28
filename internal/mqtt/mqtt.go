@@ -57,6 +57,12 @@ func (m *MQTTClient) Publish(topic string, qos byte, retained bool, payload inte
 	return token.Error()
 }
 
+func (m *MQTTClient) Subscribe(topic string, qos byte, callback mqtt.MessageHandler) error{
+	token := m.client.Subscribe(topic, qos, callback)
+	token.Wait()
+	return token.Error()
+}
+
 // Disconnect memutuskan koneksi (digunakan saat server mati)
 func (m *MQTTClient) Disconnect() {
 	m.client.Disconnect(250)

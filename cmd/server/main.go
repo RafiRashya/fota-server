@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"fota-backend/internal/api/handler"
+	"fota-backend/internal/database"
 	"fota-backend/internal/api/router"
 	"fota-backend/internal/mqtt"
 
@@ -22,6 +23,11 @@ func main() {
 		log.Println("Failed to Load .env File, Using System Environment")
 	}
 
+	db := database.InitDB()
+	log.Println("Database siap digunakan!")
+
+	otaHandler := handler.NewOTAHandler(db)
+
 	brokerAddr := os.Getenv("MQTT_BROKER") 
 	clientID := os.Getenv("MQTT_CLIENT_ID")
 	mqttUsername := os.Getenv("MQTT_USERNAME")
@@ -33,6 +39,11 @@ func main() {
 		log.Fatalf("Gagal inisialisasi MQTT TLS: %v", err)
 	}
 	defer mqttClient.Disconnect()
+
+	err := mqttClient.Subscribe("shm/ota/status", 1, otaHandler.HandleStatusUpdate)
+	if err != nil {
+		log.Printf("Gagal subscribe ke topik status OTA: %v", err)
+	}
 
 	ctx := context.Background()
 	saFilePath := os.Getenv("GCS_SA_PATH")
