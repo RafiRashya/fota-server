@@ -67,14 +67,17 @@ func main() {
 	bucketName := os.Getenv("GCS_BUCKET_NAME")
 
 	// 2. Inisialisasi Handler & Router 
+	authHandler := handler.NewAuthHandler(db)
+	
 	fwHandler := handler.NewFirmwareHandler(
 		gcsClient,
 		bucketName,
 		jwtConf.Email,
 		jwtConf.PrivateKey,
 		mqttClient,
+		db,
 	)
-	mux := router.SetupRouter(fwHandler)
+	mux := router.SetupRouter(fwHandler, authHandler)
 
 	// 3. Menjalankan Server
 	port := os.Getenv("PORT")

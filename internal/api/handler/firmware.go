@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"fota-backend/internal/middleware"
+	"fota-backend/internal/models"
 	"fota-backend/internal/mqtt"
 	"io"
 	"log"
@@ -11,6 +13,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type FirmwareHandler struct {
@@ -19,15 +23,17 @@ type FirmwareHandler struct {
 	GoogleAccessID	string
 	PrivateKey	[]byte
 	MQTTClient	*mqtt.MQTTClient
+	Database	*gorm.DB
 }
 
-func NewFirmwareHandler(client *storage.Client, bucket string, accessID string, privKey []byte, mqtt *mqtt.MQTTClient) *FirmwareHandler {
+func NewFirmwareHandler(client *storage.Client, bucket string, accessID string, privKey []byte, mqtt *mqtt.MQTTClient, db *gorm.DB) *FirmwareHandler {
 	return &FirmwareHandler{
 		StorageClient: client,
 		BucketName: bucket,
 		GoogleAccessID: accessID,
 		PrivateKey: privKey,
 		MQTTClient: mqtt,
+		Database: db,
 	}
 }
 
@@ -38,8 +44,8 @@ func (h *FirmwareHandler) Upload(w http.ResponseWriter, r *http.Request){
 	}
 
 	version := r.FormValue("version")
-	nodeLabel := r.FormValue("node_label")
-	if version == "" || nodeLabel == ""{
+	nodeName := r.FormValue("node_name")
+	if version == "" || nodeName == ""{
 		http.Error(w, "Version and Node Label Parameter Cannot be Empty", http.StatusBadRequest)
 		return
 	}
@@ -53,8 +59,14 @@ func (h *FirmwareHandler) Upload(w http.ResponseWriter, r *http.Request){
 	}
 	defer file.Close()
 
+	var node models.Node
+	if err := h.Database.Where("name = ?", nodeName).First(&node).Error; err != nil{
+		http.Error(w, "Can't Find Node", http.StatusNotFound)
+		return
+	}
+
 	ctx := context.Background()
-	objectKey := fmt.Sprintf("firmware/%s/v%s/nimble-shm-ota.bin", nodeLabel, version)
+	objectKey := fmt.Sprintf("firmware/%s/v%s/nimble-shm-ota.bin", node.MacAddress, version)
 
 	bucket := h.StorageClient.Bucket(h.BucketName)
 	obj := bucket.Object(objectKey)
@@ -84,6 +96,37 @@ func (h *FirmwareHandler) Upload(w http.ResponseWriter, r *http.Request){
 		http.Error(w, "Fail to create Signed URL", http.StatusInternalServerError)
 		return
 	}
+
+	newFirmware := models.Firmware{
+		Version:  version,
+		FileName: header.Filename,
+		FileSize: int(header.Size),
+		Checksum: "sha256-terenkripsi", // Idealnya menggunakan fungsi hash sungguhan
+	}
+	h.Database.Create(&newFirmware)
+
+	// 3. Cari Admin (Sementara ambil user pertama di DB sebagai pemicu)
+	userIDStr, ok := r.Context().Value(middleware.UserIDKey).(string)
+	if !ok {
+		http.Error(w, "Fail to obtain Identity From Token", http.StatusUnauthorized)
+		return
+	}
+
+	adminId, err := uuid.Parse(userIDStr)
+	if err != nil{
+		http.Error(w, "Invalid Admin Id Format", http.StatusBadGateway)
+		return
+	}
+
+	// 4. Buat Tiket Log OTA dengan status PENDING
+	otaLog := models.OtaLog{
+		NodeID:           node.ID,
+		TargetFirmwareID: newFirmware.ID,
+		Status:           "PENDING",
+		TriggeredBy:      adminId,
+		StartedAt:        time.Now(),
+	}
+	h.Database.Create(&otaLog)
 
 	triggerMsg := map[string]string{
 		"cmd": "start_ota",

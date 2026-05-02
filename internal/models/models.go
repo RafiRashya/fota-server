@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 	"github.com/google/uuid"
-	// "gorm.io/gorm"
+	"gorm.io/gorm"
 )
 
 // Base struct untuk tabel yang menggunakan UUID sebagai Primary Key
@@ -16,7 +16,15 @@ type User struct {
 	Email        string    `gorm:"type:varchar(255);unique;not null" json:"email"`
 	PasswordHash string    `gorm:"type:varchar(255);not null" json:"-"`
 	Role         string    `gorm:"type:varchar(50);not null" json:"role"`
-	CreatedAt    time.Time `json:"created_at"`
+	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
+}
+
+// Validasi role sebelum simpan
+func (u *User) BeforeSave(tx *gorm.DB) error {
+    if u.Role != "ADMIN" && u.Role != "USER" {
+        return gorm.ErrInvalidData
+    }
+    return nil
 }
 
 type Gateway struct {
