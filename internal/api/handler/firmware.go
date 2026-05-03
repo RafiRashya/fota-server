@@ -11,6 +11,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"crypto/sha256"   // <--- TAMBAHAN
+	"encoding/hex"
 
 	"cloud.google.com/go/storage"
 	"github.com/google/uuid"
@@ -59,6 +61,17 @@ func (h *FirmwareHandler) Upload(w http.ResponseWriter, r *http.Request){
 	}
 	defer file.Close()
 
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		log.Printf("Gagal menghitung hash: %v", err)
+		http.Error(w, "Gagal memproses integritas file", http.StatusInternalServerError)
+		return
+	}
+	
+	// Konversi byte hash menjadi string hexadecimal
+	calculatedChecksum := hex.EncodeToString(hasher.Sum(nil))
+	file.Seek(0, io.SeekStart)
+
 	var node models.Node
 	if err := h.Database.Where("name = ?", nodeName).First(&node).Error; err != nil{
 		http.Error(w, "Can't Find Node", http.StatusNotFound)
@@ -101,7 +114,7 @@ func (h *FirmwareHandler) Upload(w http.ResponseWriter, r *http.Request){
 		Version:  version,
 		FileName: header.Filename,
 		FileSize: int(header.Size),
-		Checksum: "sha256-terenkripsi", // Idealnya menggunakan fungsi hash sungguhan
+		Checksum: calculatedChecksum, // Idealnya menggunakan fungsi hash sungguhan
 	}
 	h.Database.Create(&newFirmware)
 
