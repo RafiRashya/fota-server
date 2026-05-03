@@ -13,6 +13,7 @@ func SetupRouter(firmwareHandler *handler.FirmwareHandler, authHandler *handler.
 	mux.HandleFunc("/api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("/api/v1/auth/login", authHandler.Login)
 	mux.HandleFunc("/api/v1/auth/logout", authHandler.Logout)
+	mux.HandleFunc("/api/v1/auth/refresh", authHandler.Refresh)
 	mux.HandleFunc("/api/v1/auth/me", middleware.RequireAuth(authHandler.GetMe))
 
 	uploadEndpoint := middleware.RequireAuth(

@@ -43,7 +43,9 @@ func InitDB() *gorm.DB {
 		&models.Node{},
 		&models.OtaLog{},
 		&models.ShmTelemetry{},
+		&models.RefreshToken{},
 	)
+	
 	if err != nil {
 		log.Fatalf("Gagal melakukan migrasi database: %v", err)
 	}

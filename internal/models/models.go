@@ -19,6 +19,16 @@ type User struct {
 	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
 }
 
+type RefreshToken struct {
+    Base
+    TokenHash string    `gorm:"type:varchar(255);not null" json:"token_hash"`
+    UserID    uuid.UUID `gorm:"type:uuid;not null" json:"user_id"`
+    ExpiresAt time.Time `gorm:"not null" json:"expires_at"`
+    Revoked   bool      `gorm:"not null;default:false" json:"revoked"`
+
+	User      User      `gorm:"foreignKey:UserID" json:"-"`
+}
+
 // Validasi role sebelum simpan
 func (u *User) BeforeSave(tx *gorm.DB) error {
     if u.Role != "ADMIN" && u.Role != "USER" {
