@@ -45,6 +45,12 @@ func main() {
 		log.Printf("Gagal subscribe ke topik status OTA: %v", err)
 	}
 
+	telemetryHandler := handler.NewTelemetryHandler(db)
+	err = mqttClient.Subscribe("shm/telemetry", 0, telemetryHandler.HandleTelemetry)
+	if err != nil{
+		log.Printf("Gagal subscribe ke topik telemetry: %v", err)
+	}
+
 	ctx := context.Background()
 	saFilePath := os.Getenv("GCS_SA_PATH")
 
@@ -77,7 +83,8 @@ func main() {
 		mqttClient,
 		db,
 	)
-	mux := router.SetupRouter(fwHandler, authHandler)
+	dashboardHandler := handler.NewDashboardHandler(db)
+	mux := router.SetupRouter(fwHandler, authHandler, dashboardHandler)
 
 	// 3. Menjalankan Server
 	port := os.Getenv("PORT")

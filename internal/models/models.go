@@ -82,6 +82,10 @@ type OtaLog struct {
 	TriggeredBy      uuid.UUID  `gorm:"type:uuid;not null" json:"triggered_by"`
 	StartedAt        time.Time  `json:"started_at"`
 	CompletedAt      *time.Time `json:"completed_at"`
+
+	Node           Node     `gorm:"foreignKey:NodeID" json:"node,omitempty"`
+	TargetFirmware Firmware `gorm:"foreignKey:TargetFirmwareID" json:"target_firmware,omitempty"`
+	Admin          User     `gorm:"foreignKey:TriggeredBy" json:"admin,omitempty"`
 }
 
 type ShmTelemetry struct {
