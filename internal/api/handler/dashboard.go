@@ -107,7 +107,10 @@ func (h *DashboardHandler) GetTelemetry(w http.ResponseWriter, r *http.Request) 
 // ================= MENDAPATKAN RIWAYAT FOTA =================
 func (h *DashboardHandler) GetOTALogs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		middleware.WriteJSON(w, http.StatusMethodNotAllowed, middleware.JsonResponse{
+			Success: false,
+			Message: "Method Not Allowed",
+		})
 		return
 	}
 
@@ -122,7 +125,10 @@ func (h *DashboardHandler) GetOTALogs(w http.ResponseWriter, r *http.Request) {
 		Find(&logs).Error
 
 	if err != nil {
-		http.Error(w, "Gagal mengambil riwayat OTA", http.StatusInternalServerError)
+		middleware.WriteJSON(w, http.StatusInternalServerError, middleware.JsonResponse{
+			Success: false,
+			Message: "Failed to load OTA logs",
+		})
 		return
 	}
 

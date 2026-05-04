@@ -22,9 +22,9 @@ func SetupRouter(
 	mux.HandleFunc("/api/v1/auth/me", middleware.RequireAuth(authHandler.GetMe))
 
 	// REQUIRE AUTH ROUTE //
-	mux.HandleFunc("/api/v1/nodes", middleware.RequireAuth(dashboardhandler.GetNodes))
-	mux.HandleFunc("/api/v1/telemetry", middleware.RequireAuth(dashboardhandler.GetTelemetry))
-	mux.HandleFunc("/api/v1/ota-logs", middleware.RequireAuth(dashboardhandler.GetOTALogs))
+	mux.HandleFunc("/api/v1/dashboard/nodes", middleware.RequireAuth(dashboardhandler.GetNodes))
+	mux.HandleFunc("/api/v1/dashboard/telemetry", middleware.RequireAuth(dashboardhandler.GetTelemetry))
+	mux.HandleFunc("/api/v1/dashboard/ota-logs", middleware.RequireAuth(dashboardhandler.GetOTALogs))
 	
 	// REQUIRE AUTH AND ADMIN ROLE //
 	uploadEndpoint := middleware.RequireAuth(
