@@ -115,6 +115,7 @@ func main() {
 		mqttClient,
 		db,
 	)
+	go fwHandler.StartOTAWorker()
 	mux := router.SetupRouter(fwHandler, authHandler, dashboardHandler, userHandler, deviceHandler)
 
 	go func() {

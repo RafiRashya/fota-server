@@ -17,6 +17,8 @@ type OTAStatusPayload struct {
 	Status  string `json:"status"`
 }
 
+var OTAUpdateChan = make(chan string, 100)
+
 type OTAHandler struct {
 	DB *gorm.DB
 }
@@ -58,5 +60,13 @@ func (h *OTAHandler) HandleStatusUpdate(client pahomqtt.Client, msg pahomqtt.Mes
 		
 		h.DB.Model(&node).Update("current_firmware_id", lastLog.TargetFirmwareID)
 		log.Printf("[DB] Selesai! Node %s resmi berjalan di versi baru.", payload.NodeMAC)
+	}
+
+	// Sinyalkan ke background worker jika status final tercapai
+	if payload.Status == "SUCCESS" || payload.Status == "FAILED" {
+		select {
+		case OTAUpdateChan <- payload.NodeMAC:
+		default:
+		}
 	}
 }

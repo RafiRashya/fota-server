@@ -75,6 +75,7 @@ func SetupRouter(
     mux.HandleFunc("/api/v1/admin/users/role", adminMiddleware(userHandler.UpdateUserRole))
     mux.HandleFunc("/api/v1/admin/users/revoke", adminMiddleware(userHandler.RevokeUserSessions))
 	mux.HandleFunc("/api/v1/firmware/trigger", adminMiddleware(firmwareHandler.TriggerExistingOTA))
+	mux.HandleFunc("/api/v1/firmware/bulk-trigger", adminMiddleware(firmwareHandler.TriggerBulkOTA))
 	mux.HandleFunc("/api/v1/firmwares", adminMiddleware(firmwareHandler.GetAllFirmwares))
 
 	mux.HandleFunc("/api/v1/firmware/upload", adminMiddleware(firmwareHandler.Upload))
