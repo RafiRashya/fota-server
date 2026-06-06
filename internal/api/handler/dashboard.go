@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"fota-backend/internal/middleware"
 	"fota-backend/internal/models"
@@ -140,4 +143,139 @@ func (h *DashboardHandler) GetOTALogs(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Data: logs,
 	})
+}
+
+// ================= STREAM DATA NODE (SSE) =================
+func (h *DashboardHandler) StreamNodes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		middleware.WriteJSON(w, http.StatusMethodNotAllowed, middleware.JsonResponse{
+			Success: false,
+			Message: "Method Not Allowed",
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	sendNodesData := func() error {
+		var nodes []models.Node
+		if err := h.DB.Preload("CurrentFirmware").Find(&nodes).Error; err != nil {
+			return err
+		}
+		
+		jsonData, err := json.Marshal(middleware.JsonResponse{
+			Success: true,
+			Data:    nodes,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = fmt.Fprintf(w, "data: %s\n\n", jsonData)
+		if err != nil {
+			return err
+		}
+		flusher.Flush()
+		return nil
+	}
+
+	if err := sendNodesData(); err != nil {
+		return
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if err := sendNodesData(); err != nil {
+				return
+			}
+		}
+	}
+}
+
+// ================= STREAM RIWAYAT FOTA (SSE) =================
+func (h *DashboardHandler) StreamOTALogs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		middleware.WriteJSON(w, http.StatusMethodNotAllowed, middleware.JsonResponse{
+			Success: false,
+			Message: "Method Not Allowed",
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	sendOTALogsData := func() error {
+		var logs []models.OtaLog
+		err := h.DB.
+			Preload("Node").
+			Preload("TargetFirmware").
+			Preload("Admin").
+			Order("started_at desc").
+			Limit(100).
+			Find(&logs).Error
+		if err != nil {
+			return err
+		}
+
+		for i := range logs {
+			logs[i].Admin.PasswordHash = ""
+		}
+
+		jsonData, err := json.Marshal(middleware.JsonResponse{
+			Success: true,
+			Data:    logs,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = fmt.Fprintf(w, "data: %s\n\n", jsonData)
+		if err != nil {
+			return err
+		}
+		flusher.Flush()
+		return nil
+	}
+
+	if err := sendOTALogsData(); err != nil {
+		return
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if err := sendOTALogsData(); err != nil {
+				return
+			}
+		}
+	}
 }

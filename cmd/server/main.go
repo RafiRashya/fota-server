@@ -6,9 +6,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"fota-backend/internal/api/handler"
 	"fota-backend/internal/database"
+	"fota-backend/internal/models"
 	"fota-backend/internal/api/router"
 	"fota-backend/internal/mqtt"
 
@@ -74,6 +76,13 @@ func main() {
 
 	// 2. Inisialisasi Handler & Router 
 	authHandler := handler.NewAuthHandler(db)
+	userHandler := handler.NewUserManagementHandler(db)
+	deviceHandler := handler.NewDeviceHandler(db)
+	dashboardHandler := handler.NewDashboardHandler(db)
+	err = mqttClient.Subscribe("shm/gateway/status", 1, deviceHandler.HandleGatewayStatus)
+	if err != nil {
+		log.Printf("Gagal subscribe ke topik status gateway: %v", err)
+	}
 	
 	fwHandler := handler.NewFirmwareHandler(
 		gcsClient,
@@ -83,8 +92,24 @@ func main() {
 		mqttClient,
 		db,
 	)
-	dashboardHandler := handler.NewDashboardHandler(db)
-	mux := router.SetupRouter(fwHandler, authHandler, dashboardHandler)
+	mux := router.SetupRouter(fwHandler, authHandler, dashboardHandler, userHandler, deviceHandler)
+
+	go func() {
+		// Jalankan pengecekan setiap 1 menit
+		ticker := time.NewTicker(1 * time.Minute)
+		for range ticker.C {
+			thresholdTime := time.Now().Add(-5 * time.Minute)
+			
+			// 1. Cek Node yang terputus
+			resultNode := db.Model(&models.Node{}).
+				Where("status = ? AND updated_at < ?", "ONLINE", thresholdTime).
+				Update("status", "OFFLINE")
+
+			if resultNode.RowsAffected > 0 {
+				log.Printf("[WATCHDOG] Mendeteksi %d Node kehilangan koneksi. Diubah ke OFFLINE.", resultNode.RowsAffected)
+			}
+		}
+	}()
 
 	// 3. Menjalankan Server
 	port := os.Getenv("PORT")

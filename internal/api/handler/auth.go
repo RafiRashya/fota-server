@@ -32,7 +32,6 @@ func NewAuthHandler(db *gorm.DB) *AuthHandler {
 type RegisterReq struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
-	Role     string `json:"role"` // ADMIN atau USER
 }
 
 type LoginReq struct {
@@ -137,13 +136,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Role != "ADMIN" && req.Role != "USER" {
-		middleware.WriteJSON(w, http.StatusBadRequest, middleware.JsonResponse{
-			Success: false,
-			Message: "Role must be ADMIN or User",
-		})
-	}
-
 	// 1. Enkripsi Kata Sandi (Bcrypt)
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -158,7 +150,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	user := models.User{
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
-		Role:         req.Role,
+		Role:         "USER",
 	}
 
 	if err := h.DB.Create(&user).Error; err != nil {
@@ -364,7 +356,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
     hash := hashToken(req.RefreshToken)
     var rec models.RefreshToken
-    if err := h.DB.Where("token_hash = ? AND revoked = false", hash).First(&rec).Error; err != nil {
+    if err := h.DB.Preload("User").Where("token_hash = ? AND revoked = false", hash).First(&rec).Error; err != nil {
         middleware.WriteJSON(w, http.StatusUnauthorized, middleware.JsonResponse{
 			Success: false,
 			Message: "Invalid or revoked refresh token",

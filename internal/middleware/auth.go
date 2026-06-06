@@ -31,7 +31,15 @@ func WriteJSON(w http.ResponseWriter, statusCode int, resp JsonResponse) {
 func RequireAuth(next http.HandlerFunc) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         authHeader := r.Header.Get("Authorization")
-        if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+        var tokenString string
+
+        if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+            tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+        } else {
+            tokenString = r.URL.Query().Get("token")
+        }
+
+        if tokenString == "" {
             WriteJSON(w, http.StatusUnauthorized, JsonResponse{
                 Success: false,
                 Message: "Token tidak ditemukan",
@@ -39,7 +47,6 @@ func RequireAuth(next http.HandlerFunc) http.HandlerFunc {
             return
         }
 
-        tokenString := strings.TrimPrefix(authHeader, "Bearer ")
         secret := []byte(os.Getenv("JWT_SECRET"))
 
         // Parsing dan Validasi Token

@@ -95,4 +95,6 @@ type ShmTelemetry struct {
 	Ay     float64   `gorm:"not null" json:"ay"`
 	Az     float64   `gorm:"not null" json:"az"`
 	Vbatt  float64   `gorm:"not null" json:"vbatt"`
+
+	Node Node	`gorm:"foreignkey:NodeID" json:"node,omitempty"`
 }
