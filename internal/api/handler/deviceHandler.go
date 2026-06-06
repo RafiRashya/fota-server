@@ -186,10 +186,17 @@ func (h *DeviceHandler) CreateNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var defaultFw models.Firmware
+	var firmwareID *uuid.UUID
+	if err := h.DB.Where("version = ?", "1.0.0").First(&defaultFw).Error; err == nil {
+		firmwareID = &defaultFw.ID
+	}
+
 	node := models.Node{
-		GatewayID:  gatewayID,
-		Name:       req.Name,
-		MacAddress: req.MacAddress,
+		GatewayID:         gatewayID,
+		Name:              req.Name,
+		MacAddress:        req.MacAddress,
+		CurrentFirmwareID: firmwareID,
 	}
 
 	if err := h.DB.Create(&node).Error; err != nil {

@@ -27,6 +27,7 @@ func SetupRouter(
 	mux.HandleFunc("/api/v1/dashboard/nodes", middleware.RequireAuth(dashboardhandler.GetNodes))
 	mux.HandleFunc("/api/v1/dashboard/nodes/stream", middleware.RequireAuth(dashboardhandler.StreamNodes))
 	mux.HandleFunc("/api/v1/dashboard/telemetry", middleware.RequireAuth(dashboardhandler.GetTelemetry))
+	mux.HandleFunc("/api/v1/dashboard/telemetry/stream", middleware.RequireAuth(dashboardhandler.StreamTelemetry))
 	mux.HandleFunc("/api/v1/dashboard/ota-logs", middleware.RequireAuth(dashboardhandler.GetOTALogs))
 	mux.HandleFunc("/api/v1/dashboard/ota-logs/stream", middleware.RequireAuth(dashboardhandler.StreamOTALogs))
 	

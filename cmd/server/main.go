@@ -18,6 +18,7 @@ import (
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -73,6 +74,28 @@ func main() {
 	defer gcsClient.Close()
 
 	bucketName := os.Getenv("GCS_BUCKET_NAME")
+
+	// Cek apakah firmware 1.0.0 ada di database
+	var defaultFw models.Firmware
+	inDB := true
+	err = db.Where("version = ?", "1.0.0").First(&defaultFw).Error
+	if err == gorm.ErrRecordNotFound {
+		inDB = false
+	}
+
+	// Cek apakah firmware 1.0.0 ada di GCS
+	inGCS := true
+	objectKey := "firmware/v1.0.0/nimble-shm-ota.bin"
+	bucket := gcsClient.Bucket(bucketName)
+	_, errAttr := bucket.Object(objectKey).Attrs(ctx)
+	if errAttr != nil {
+		inGCS = false
+	}
+
+	// Hanya jalankan seeder jika belum ada di database DAN belum ada di GCS
+	if !inDB && !inGCS {
+		database.SeedDefaultFirmware(db, gcsClient, bucketName)
+	}
 
 	// 2. Inisialisasi Handler & Router 
 	authHandler := handler.NewAuthHandler(db)
