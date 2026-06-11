@@ -381,7 +381,7 @@ func (h *FirmwareHandler) StartOTAWorker() {
 		log.Printf("[OTA-WORKER] Trigger OTA berhasil dipublish untuk Node %s. Menunggu respon...", otaLog.Node.MacAddress)
 
 		// 4. Blokir dan tunggu respon sukses/gagal atau timeout (3 menit)
-		timeout := time.After(3 * time.Minute)
+		timeout := time.After(5 * time.Minute)
 		completed := false
 
 		for !completed {
@@ -394,7 +394,7 @@ func (h *FirmwareHandler) StartOTAWorker() {
 					log.Printf("[OTA-WORKER] Mengabaikan status update node lain: %s", mac)
 				}
 			case <-timeout:
-				log.Printf("[OTA-WORKER] Timeout 3 menit terlampaui untuk node %s (%s). Update status menjadi FAILED.", otaLog.Node.Name, otaLog.Node.MacAddress)
+				log.Printf("[OTA-WORKER] Timeout 5 menit terlampaui untuk node %s (%s). Update status menjadi FAILED.", otaLog.Node.Name, otaLog.Node.MacAddress)
 				
 				// Cek terlebih dahulu di DB, pastikan status belum diubah oleh handleStatusUpdate di detik-detik terakhir
 				var checkLog models.OtaLog

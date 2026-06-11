@@ -1,3 +1,6 @@
 ota-service-account.json
 .env
 ./firmware/
+Caddyfile
+docker-compose.yml
+Dockerfile

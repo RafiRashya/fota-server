@@ -2,7 +2,9 @@ package mqtt
 
 import (
 	"crypto/tls"
+	"fmt"
 	"log"
+	"os"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -17,6 +19,14 @@ type MQTTClient struct {
 func NewMQTTClient(broker , clientID, username, password string) *MQTTClient {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(broker)
+
+	// Dapatkan hostname kontainer untuk memastikan Client ID unik saat di-scale
+	if hostname, err := os.Hostname(); err == nil {
+		clientID = fmt.Sprintf("%s_%s", clientID, hostname)
+	} else {
+		clientID = fmt.Sprintf("%s_%d", clientID, time.Now().UnixNano())
+	}
+
 	opts.SetClientID(clientID)
 	opts.SetUsername(username)
 	opts.SetPassword(password)
