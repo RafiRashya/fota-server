@@ -77,6 +77,7 @@ func SetupRouter(
 	mux.HandleFunc("/api/v1/firmware/trigger", adminMiddleware(firmwareHandler.TriggerExistingOTA))
 	mux.HandleFunc("/api/v1/firmware/bulk-trigger", adminMiddleware(firmwareHandler.TriggerBulkOTA))
 	mux.HandleFunc("/api/v1/firmwares", adminMiddleware(firmwareHandler.GetAllFirmwares))
+	mux.HandleFunc("/api/v1/firmware/delete", adminMiddleware(firmwareHandler.DeleteFirmware))
 
 	mux.HandleFunc("/api/v1/firmware/upload", adminMiddleware(firmwareHandler.Upload))
 	return middleware.EnableCORS(mux)

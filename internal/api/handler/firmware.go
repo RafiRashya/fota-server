@@ -33,6 +33,12 @@ type TriggerOTAReq struct {
 	FirmwareID string `json:"firmware_id"`
 }
 
+// Struct untuk request bulk OTA trigger
+type TriggerBulkOTAReq struct {
+	NodeIDs    []string `json:"node_ids"`
+	FirmwareID string   `json:"firmware_id"`
+}
+
 func NewFirmwareHandler(client *storage.Client, bucket string, accessID string, privKey []byte, mqtt *mqtt.MQTTClient, db *gorm.DB) *FirmwareHandler {
 	return &FirmwareHandler{
 		StorageClient: client,
@@ -197,12 +203,6 @@ func (h *FirmwareHandler) TriggerExistingOTA(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// Struct untuk request bulk OTA trigger
-type TriggerBulkOTAReq struct {
-	NodeIDs    []string `json:"node_ids"`
-	FirmwareID string   `json:"firmware_id"`
-}
-
 // TriggerBulkOTA places multiple OTA requests into the database queue (status PENDING)
 func (h *FirmwareHandler) TriggerBulkOTA(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -341,7 +341,7 @@ func (h *FirmwareHandler) StartOTAWorker() {
 			GoogleAccessID: h.GoogleAccessID,
 			PrivateKey:     h.PrivateKey,
 			Method:         "GET",
-			Expires:        time.Now().Add(24 * time.Hour), // Berlaku 24 Jam untuk keamanan selama antrean panjang
+			Expires:        time.Now().Add(30 * time.Minute), // Berlaku 24 Jam untuk keamanan selama antrean panjang
 		}
 
 		signedURL, err := storage.SignedURL(h.BucketName, objectKey, opts)
@@ -407,4 +407,67 @@ func (h *FirmwareHandler) StartOTAWorker() {
 			}
 		}
 	}
+}
+
+// DeleteFirmware deletes a firmware from DB (updating nodes and deleting logs) and also removes it from GCS
+func (h *FirmwareHandler) DeleteFirmware(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		middleware.WriteJSON(w, http.StatusMethodNotAllowed, middleware.JsonResponse{Success: false, Message: "Method Not Allowed"})
+		return
+	}
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		middleware.WriteJSON(w, http.StatusBadRequest, middleware.JsonResponse{Success: false, Message: "ID Firmware wajib disertakan"})
+		return
+	}
+
+	// 1. Cari data Firmware
+	var firmware models.Firmware
+	if err := h.Database.First(&firmware, "id = ?", id).Error; err != nil {
+		middleware.WriteJSON(w, http.StatusNotFound, middleware.JsonResponse{Success: false, Message: "Firmware tidak ditemukan"})
+		return
+	}
+
+	// 2. Jalankan DB transaction untuk menghapus dependensi
+	tx := h.Database.Begin()
+	
+	// Set CurrentFirmwareID ke NULL pada semua Node yang merujuk firmware ini
+	if err := tx.Model(&models.Node{}).Where("current_firmware_id = ?", id).Update("current_firmware_id", nil).Error; err != nil {
+		tx.Rollback()
+		middleware.WriteJSON(w, http.StatusInternalServerError, middleware.JsonResponse{Success: false, Message: "Gagal melepaskan relasi Node"})
+		return
+	}
+
+	// Hapus all OtaLogs yang merujuk ke firmware ini
+	if err := tx.Where("target_firmware_id = ?", id).Delete(&models.OtaLog{}).Error; err != nil {
+		tx.Rollback()
+		middleware.WriteJSON(w, http.StatusInternalServerError, middleware.JsonResponse{Success: false, Message: "Gagal menghapus log OTA terkait"})
+		return
+	}
+
+	// Hapus record Firmware dari DB
+	if err := tx.Delete(&models.Firmware{}, "id = ?", id).Error; err != nil {
+		tx.Rollback()
+		middleware.WriteJSON(w, http.StatusInternalServerError, middleware.JsonResponse{Success: false, Message: "Gagal menghapus data firmware dari database"})
+		return
+	}
+
+	tx.Commit()
+
+	// 3. Hapus file biner firmware dari Google Cloud Storage
+	ctx := context.Background()
+	objectKey := fmt.Sprintf("firmware/v%s/nimble-shm-ota.bin", firmware.Version)
+	bucket := h.StorageClient.Bucket(h.BucketName)
+	obj := bucket.Object(objectKey)
+	
+	// Kita abaikan jika file tidak ditemukan di GCS (mungkin sudah dihapus manual)
+	if err := obj.Delete(ctx); err != nil && err != storage.ErrObjectNotExist {
+		log.Printf("[FIRMWARE-HANDLER] Gagal menghapus file dari GCS: %v", err)
+	}
+
+	middleware.WriteJSON(w, http.StatusOK, middleware.JsonResponse{
+		Success: true,
+		Message: fmt.Sprintf("Firmware versi %s berhasil dihapus dari sistem", firmware.Version),
+	})
 }
