@@ -17,6 +17,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type FirmwareHandler struct {
@@ -310,14 +311,20 @@ func (h *FirmwareHandler) StartOTAWorker() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		// Ambil antrean PENDING tertua
+		// Jalankan proses penarikan antrean di dalam transaksi DB
+		tx := h.Database.Begin()
+
+		// 1. Ambil antrean PENDING tertua dan berikan pessimistic lock (SELECT ... FOR UPDATE)
+		// pada baris ini agar instans backend lain tidak bisa mengakses/mengubah baris yang sama.
 		var otaLog models.OtaLog
-		err := h.Database.Preload("Node").Preload("TargetFirmware").
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Preload("Node").Preload("TargetFirmware").
 			Where("status = ?", "PENDING").
 			Order("started_at asc").
 			First(&otaLog).Error
 
 		if err != nil {
+			tx.Rollback()
 			if err == gorm.ErrRecordNotFound {
 				continue
 			}
@@ -325,15 +332,38 @@ func (h *FirmwareHandler) StartOTAWorker() {
 			continue
 		}
 
-		log.Printf("[OTA-WORKER] Memproses antrean OTA untuk Node %s (%s) ke versi %s", otaLog.Node.Name, otaLog.Node.MacAddress, otaLog.TargetFirmware.Version)
-
-		// 1. Update status ke IN_PROGRESS
-		otaLog.Status = "IN_PROGRESS"
-		otaLog.StartedAt = time.Now()
-		if err := h.Database.Save(&otaLog).Error; err != nil {
-			log.Printf("[OTA-WORKER] Gagal mengupdate status ke IN_PROGRESS: %v", err)
+		// 2. Periksa apakah saat ini ada proses OTA lain yang sedang aktif (IN_PROGRESS) secara global.
+		// Karena kita memegang lock pada baris PENDING tertua tadi, kita dijamin aman dari race condition.
+		var activeCount int64
+		if err := tx.Model(&models.OtaLog{}).Where("status = ?", "IN_PROGRESS").Count(&activeCount).Error; err != nil {
+			log.Printf("[OTA-WORKER] Gagal memeriksa status IN_PROGRESS: %v", err)
+			tx.Rollback()
 			continue
 		}
+
+		if activeCount > 0 {
+			// Jika ada proses OTA lain yang sedang berjalan, batalkan transaksi agar lock dilepaskan
+			// dan lewati iterasi ini (proses antrean PENDING ini ditunda secara sekuensial).
+			tx.Rollback()
+			continue
+		}
+
+		// 3. Update status antrean ini ke IN_PROGRESS
+		otaLog.Status = "IN_PROGRESS"
+		otaLog.StartedAt = time.Now()
+		if err := tx.Save(&otaLog).Error; err != nil {
+			log.Printf("[OTA-WORKER] Gagal mengupdate status ke IN_PROGRESS: %v", err)
+			tx.Rollback()
+			continue
+		}
+
+		// Commit transaksi untuk menyimpan status IN_PROGRESS dan melepas lock
+		if err := tx.Commit().Error; err != nil {
+			log.Printf("[OTA-WORKER] Gagal commit transaksi OTA: %v", err)
+			continue
+		}
+
+		log.Printf("[OTA-WORKER] Memproses antrean OTA untuk Node %s (%s) ke versi %s", otaLog.Node.Name, otaLog.Node.MacAddress, otaLog.TargetFirmware.Version)
 
 		// 2. Generate signed URL
 		objectKey := fmt.Sprintf("firmware/v%s/nimble-shm-ota.bin", otaLog.TargetFirmware.Version)
