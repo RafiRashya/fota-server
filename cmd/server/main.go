@@ -119,10 +119,9 @@ func main() {
 	mux := router.SetupRouter(fwHandler, authHandler, dashboardHandler, userHandler, deviceHandler)
 
 	go func() {
-		// Jalankan pengecekan setiap 1 menit
-		ticker := time.NewTicker(1 * time.Minute)
+		ticker := time.NewTicker(30 * time.Second)
 		for range ticker.C {
-			thresholdTime := time.Now().Add(-5 * time.Minute)
+			thresholdTime := time.Now().Add(-60 * time.Second)
 			
 			// 1. Cek Node yang terputus
 			resultNode := db.Model(&models.Node{}).
